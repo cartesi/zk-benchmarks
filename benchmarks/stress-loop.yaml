@@ -1,0 +1,9 @@
+name: stress-loop
+description: "stress-ng loop benchmark - tests CPU loop operations"
+command: "stress-ng --cpu 1 --cpu-method loop --cpu-ops 400 --metrics"
+step_sizes:
+  min: 50000
+  max: 150000
+  increment: 10000
+max_mcycle: 60000000
+timeout: 600

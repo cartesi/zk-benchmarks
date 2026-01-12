@@ -1,0 +1,3 @@
+[submodule "deps/machine"]
+	path = deps/machine
+	url = https://github.com/cartesi/machine-emulator.git

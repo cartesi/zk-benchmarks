@@ -1,0 +1,2 @@
+linux_image_url: https://github.com/cartesi/machine-linux-image/releases/download/v0.20.0/linux-6.5.13-ctsi-1-v0.20.0.bin
+rootfs_image_url: https://github.com/cartesi/machine-rootfs-image/releases/download/v0.20.0-test1/rootfs-ubuntu.ext2

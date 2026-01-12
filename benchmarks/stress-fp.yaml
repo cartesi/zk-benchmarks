@@ -1,0 +1,9 @@
+name: stress-fp
+description: "stress-ng floating-point benchmark - tests FP operations"
+command: "stress-ng --cpu 1 --cpu-method float64 --cpu-ops 400 --metrics"
+step_sizes:
+  min: 50000
+  max: 150000
+  increment: 10000
+max_mcycle: 60000000
+timeout: 600
