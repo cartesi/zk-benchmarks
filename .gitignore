@@ -1,7 +1,6 @@
 __pycache__/
 *.pyc
 images/
-results/
 *.bin
 *.ext2
 .DS_Store

@@ -1,0 +1,10 @@
+name: mc-loop
+description: "Monte Carlo sampling of CPU loop benchmark"
+command: "stress-ng --cpu 1 --cpu-method loop --cpu-ops 800 --metrics"
+mode: monte-carlo
+hardware_profiles:
+  - risc0_rtx_4090
+  - risc0_cpu
+monte_carlo:
+  num_samples: 100
+  window_size: 100000

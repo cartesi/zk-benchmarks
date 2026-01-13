@@ -1,0 +1,10 @@
+name: mc-tree
+description: "Monte Carlo sampling of tree operations - complex memory access patterns"
+command: "stress-ng --tree 1 --tree-ops 2 --metrics"
+mode: monte-carlo
+hardware_profiles:
+  - risc0_rtx_4090
+  - risc0_cpu
+monte_carlo:
+  num_samples: 100
+  window_size: 100000

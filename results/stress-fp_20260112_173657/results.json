@@ -1,0 +1,209 @@
+[
+  {
+    "execution_time": "4.700275417s",
+    "number_of_segments": 184,
+    "total_cycles": 192937984,
+    "user_cycles": 174253608,
+    "step": 50000,
+    "benchmark": "stress-fp",
+    "page_count": 122
+  },
+  {
+    "execution_time": "5.039932833s",
+    "number_of_segments": 207,
+    "total_cycles": 216530944,
+    "user_cycles": 194838812,
+    "step": 70000,
+    "benchmark": "stress-fp",
+    "page_count": 122
+  },
+  {
+    "execution_time": "7.971991708s",
+    "number_of_segments": 328,
+    "total_cycles": 343932928,
+    "user_cycles": 309530944,
+    "step": 90000,
+    "benchmark": "stress-fp",
+    "page_count": 191
+  },
+  {
+    "execution_time": "8.36998025s",
+    "number_of_segments": 354,
+    "total_cycles": 370671616,
+    "user_cycles": 333023631,
+    "step": 110000,
+    "benchmark": "stress-fp",
+    "page_count": 191
+  },
+  {
+    "execution_time": "8.964026459s",
+    "number_of_segments": 379,
+    "total_cycles": 397410304,
+    "user_cycles": 356047116,
+    "step": 130000,
+    "benchmark": "stress-fp",
+    "page_count": 190
+  },
+  {
+    "execution_time": "6.915523625s",
+    "number_of_segments": 297,
+    "total_cycles": 311427072,
+    "user_cycles": 277145926,
+    "step": 150000,
+    "benchmark": "stress-fp",
+    "page_count": 118
+  },
+  {
+    "execution_time": "7.382183125s",
+    "number_of_segments": 324,
+    "total_cycles": 339214336,
+    "user_cycles": 301897784,
+    "step": 170000,
+    "benchmark": "stress-fp",
+    "page_count": 123
+  },
+  {
+    "execution_time": "10.934895542s",
+    "number_of_segments": 468,
+    "total_cycles": 490733568,
+    "user_cycles": 439754952,
+    "step": 190000,
+    "benchmark": "stress-fp",
+    "page_count": 219
+  },
+  {
+    "execution_time": "11.975990542s",
+    "number_of_segments": 511,
+    "total_cycles": 535822336,
+    "user_cycles": 480997951,
+    "step": 210000,
+    "benchmark": "stress-fp",
+    "page_count": 234
+  },
+  {
+    "execution_time": "14.719151666s",
+    "number_of_segments": 629,
+    "total_cycles": 659554304,
+    "user_cycles": 595142641,
+    "step": 230000,
+    "benchmark": "stress-fp",
+    "page_count": 301
+  },
+  {
+    "execution_time": "17.616787833s",
+    "number_of_segments": 701,
+    "total_cycles": 735051776,
+    "user_cycles": 665477390,
+    "step": 250000,
+    "benchmark": "stress-fp",
+    "page_count": 332
+  },
+  {
+    "execution_time": "20.021387958s",
+    "number_of_segments": 740,
+    "total_cycles": 775159808,
+    "user_cycles": 701468988,
+    "step": 270000,
+    "benchmark": "stress-fp",
+    "page_count": 343
+  },
+  {
+    "execution_time": "19.042243875s",
+    "number_of_segments": 784,
+    "total_cycles": 822083584,
+    "user_cycles": 744720194,
+    "step": 290000,
+    "benchmark": "stress-fp",
+    "page_count": 359
+  },
+  {
+    "execution_time": "19.789185s",
+    "number_of_segments": 831,
+    "total_cycles": 871366656,
+    "user_cycles": 789489605,
+    "step": 310000,
+    "benchmark": "stress-fp",
+    "page_count": 376
+  },
+  {
+    "execution_time": "22.543687s",
+    "number_of_segments": 927,
+    "total_cycles": 972029952,
+    "user_cycles": 882668294,
+    "step": 330000,
+    "benchmark": "stress-fp",
+    "page_count": 430
+  },
+  {
+    "execution_time": "23.720530125s",
+    "number_of_segments": 974,
+    "total_cycles": 1021313024,
+    "user_cycles": 926881874,
+    "step": 350000,
+    "benchmark": "stress-fp",
+    "page_count": 442
+  },
+  {
+    "execution_time": "23.575010166s",
+    "number_of_segments": 1012,
+    "total_cycles": 1061158912,
+    "user_cycles": 962639473,
+    "step": 370000,
+    "benchmark": "stress-fp",
+    "page_count": 448
+  },
+  {
+    "execution_time": "24.0553245s",
+    "number_of_segments": 1041,
+    "total_cycles": 1091567616,
+    "user_cycles": 988973185,
+    "step": 390000,
+    "benchmark": "stress-fp",
+    "page_count": 452
+  },
+  {
+    "execution_time": "25.298370875s",
+    "number_of_segments": 1071,
+    "total_cycles": 1122238464,
+    "user_cycles": 1015398492,
+    "step": 410000,
+    "benchmark": "stress-fp",
+    "page_count": 455
+  },
+  {
+    "execution_time": "26.206366542s",
+    "number_of_segments": 1100,
+    "total_cycles": 1152647168,
+    "user_cycles": 1041729133,
+    "step": 430000,
+    "benchmark": "stress-fp",
+    "page_count": 459
+  },
+  {
+    "execution_time": "25.792464792s",
+    "number_of_segments": 1123,
+    "total_cycles": 1176567808,
+    "user_cycles": 1061741269,
+    "step": 450000,
+    "benchmark": "stress-fp",
+    "page_count": 457
+  },
+  {
+    "execution_time": "26.703205709s",
+    "number_of_segments": 1123,
+    "total_cycles": 1177026560,
+    "user_cycles": 1059070990,
+    "step": 470000,
+    "benchmark": "stress-fp",
+    "page_count": 442
+  },
+  {
+    "execution_time": "24.520969375s",
+    "number_of_segments": 1097,
+    "total_cycles": 1149501440,
+    "user_cycles": 1032580867,
+    "step": 490000,
+    "benchmark": "stress-fp",
+    "page_count": 397
+  }
+]

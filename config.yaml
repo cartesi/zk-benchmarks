@@ -1,2 +1,17 @@
 linux_image_url: https://github.com/cartesi/machine-linux-image/releases/download/v0.20.0/linux-6.5.13-ctsi-1-v0.20.0.bin
 rootfs_image_url: https://github.com/cartesi/machine-rootfs-image/releases/download/v0.20.0-test1/rootfs-ubuntu.ext2
+
+# Risc0 throughput data: https://reports.risczero.com/benchmarks/Linux-cpu
+hardware_profiles:
+  risc0_rtx_3090_ti:
+    name: "RISC0 NVIDIA RTX 3090 Ti"
+    throughput_khz: 60
+  risc0_rtx_4090:
+    name: "RISC0 NVIDIA RTX 4090"
+    throughput_khz: 85
+  risc0_m3_max:
+    name: "RISC0 MacBook M3 Max"
+    throughput_khz: 40
+  risc0_cpu:
+    name: "RISC0 CPU (x86)"
+    throughput_khz: 10

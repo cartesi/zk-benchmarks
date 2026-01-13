@@ -1,0 +1,10 @@
+name: mc-heapsort
+description: "Monte Carlo sampling of heapsort benchmark - memory allocation patterns"
+command: "stress-ng --heapsort 1 --heapsort-ops 5 --metrics"
+mode: monte-carlo
+hardware_profiles:
+  - risc0_rtx_4090
+  - risc0_cpu
+monte_carlo:
+  num_samples: 100
+  window_size: 100000

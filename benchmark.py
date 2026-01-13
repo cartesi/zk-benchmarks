@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import random
 import re
 import struct
 import subprocess
@@ -12,8 +13,10 @@ from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import yaml
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 PROJECT_ROOT = Path(__file__).parent.absolute()
 BENCHMARKS_DIR = PROJECT_ROOT / "benchmarks"
@@ -52,6 +55,22 @@ def get_image_url(image_type: str) -> str:
             or DEFAULT_ROOTFS_IMAGE_URL
         )
     return ""
+
+
+def get_hardware_profile(hardware_key: str) -> dict:
+    """Get hardware profile from config."""
+    config = load_config()
+    profiles = config.get("hardware_profiles", {})
+
+    if hardware_key not in profiles:
+        raise ValueError(f"Unknown hardware profile: {hardware_key}. Available: {list(profiles.keys())}")
+
+    return profiles[hardware_key]
+
+
+def estimate_proving_time(cycles: int, throughput_khz: float) -> float:
+    """Estimate proving time in seconds based on cycles and throughput."""
+    return cycles / (throughput_khz * 1000)
 
 
 def download_file(url: str, dest: Path) -> bool:
@@ -311,7 +330,7 @@ def read_page_count(log_path: Path) -> int | None:
         return None
 
 
-def generate_plots(results: list[dict], benchmark_name: str, output_dir: Path):
+def generate_plots(results: list[dict], benchmark_name: str, output_dir: Path, hardware_profiles: list[dict] | None = None):
     if not results:
         print("No results to plot.")
         return
@@ -368,7 +387,23 @@ def generate_plots(results: list[dict], benchmark_name: str, output_dir: Path):
     axs[2, 0].set_ylabel("Pages Touched")
     axs[2, 0].grid(True)
 
-    axs[2, 1].axis("off")
+    # Plot estimated proving times for each hardware profile
+    if hardware_profiles:
+        colors = ["crimson", "dodgerblue", "forestgreen", "darkorange", "purple"]
+        markers = ["o", "s", "^", "D", "v"]
+        for i, profile in enumerate(hardware_profiles):
+            throughput = profile["throughput_khz"]
+            estimated_times = [estimate_proving_time(c, throughput) for c in total_cycles]
+            color = colors[i % len(colors)]
+            marker = markers[i % len(markers)]
+            axs[2, 1].plot(step_lengths, estimated_times, color=color, marker=marker, label=profile["name"])
+        axs[2, 1].set_title("Est. Proving Time")
+        axs[2, 1].set_xlabel("Step Length (cycles)")
+        axs[2, 1].set_ylabel("Time (seconds)")
+        axs[2, 1].legend(loc="upper left", fontsize=8)
+        axs[2, 1].grid(True)
+    else:
+        axs[2, 1].axis("off")
 
     plt.tight_layout(rect=[0, 0, 1, 0.97])
 
@@ -378,6 +413,312 @@ def generate_plots(results: list[dict], benchmark_name: str, output_dir: Path):
     print(f"Plots saved to {plot_path}")
 
 
+def get_total_cycles(
+    command: str,
+    rootfs_path: Path,
+    linux_path: Path,
+    max_mcycle: int | None = None,
+) -> int | None:
+    machine_lua = MACHINE_DIR / "src" / "cartesi-machine.lua"
+
+    cmd = [
+        str(machine_lua),
+        f"--ram-image={linux_path}",
+        f"--flash-drive=label:root,data_filename:{rootfs_path}",
+    ]
+    if max_mcycle:
+        cmd.append(f"--max-mcycle={max_mcycle}")
+    cmd.extend(["--", command])
+
+    print(f"Getting total cycles for command: {command}")
+    print(f"  cmd: {' '.join(cmd)}")
+
+    env = os.environ.copy()
+    env["LUA_CPATH_5_4"] = f"{MACHINE_DIR / 'src'}/?.so;;"
+    env["LUA_PATH_5_4"] = f"{MACHINE_DIR / 'src'}/?.lua;;"
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=1200,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        print("  Machine timed out while getting total cycles.")
+        return None
+
+    output = result.stderr + result.stdout
+    for line in output.split("\n"):
+        match = re.match(r"^Cycles:\s*(\d+)", line)
+        if match:
+            cycles = int(match.group(1))
+            print(f"  Total cycles: {cycles}")
+            return cycles
+
+    print("  Failed to extract total cycles from output.")
+    print(f"  Return code: {result.returncode}")
+    print(f"  stderr (last 500 chars): {result.stderr[-500:]}")
+    return None
+
+
+def measure_boot_cycles(
+    rootfs_path: Path,
+    linux_path: Path,
+) -> int | None:
+    print("Measuring boot cycles (running 'ls' payload)...")
+    cycles = get_total_cycles(
+        command="ls",
+        rootfs_path=rootfs_path,
+        linux_path=linux_path,
+        max_mcycle=100000000,
+    )
+    if cycles:
+        boot_cycles = int(cycles * 1.1)
+        print(f"  Boot cycles (with 10% buffer): {boot_cycles}")
+        return boot_cycles
+    return None
+
+
+def run_window_sample(
+    command: str,
+    start_cycle: int,
+    window_size: int,
+    log_path: Path,
+    rootfs_path: Path,
+    linux_path: Path,
+) -> tuple[int | None, str | None, str | None]:
+    machine_lua = MACHINE_DIR / "src" / "cartesi-machine.lua"
+
+    cmd = [
+        str(machine_lua),
+        f"--ram-image={linux_path}",
+        f"--flash-drive=label:root,data_filename:{rootfs_path}",
+        "--hash-tree=hash_function:sha256",
+        f"--max-mcycle={start_cycle + window_size + 1000}",
+        f"--log-step={window_size},{log_path}",
+        "--",
+        command,
+    ]
+
+    env = os.environ.copy()
+    env["LUA_CPATH_5_4"] = f"{MACHINE_DIR / 'src'}/?.so;;"
+    env["LUA_PATH_5_4"] = f"{MACHINE_DIR / 'src'}/?.lua;;"
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=600,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return None, None, None
+
+    hashes = []
+    for line in result.stderr.split("\n"):
+        match = re.match(r"^(\d+): ([a-f0-9]{64})$", line)
+        if match:
+            hashes.append(match.group(2))
+
+    if len(hashes) < 2:
+        return None, None, None
+
+    page_count = read_page_count(log_path)
+    return page_count, hashes[0], hashes[1]
+
+
+def store_metrics_jsonl(metrics: dict, output_path: Path):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "a") as f:
+        f.write(json.dumps(metrics) + "\n")
+
+
+def generate_histograms(
+    data_path: Path,
+    benchmark_name: str,
+    window_size: int,
+    output_dir: Path,
+    hardware_profiles: list[dict] | None = None,
+):
+    if not data_path.exists():
+        print(f"No data file found at {data_path}")
+        return
+
+    records = []
+    with open(data_path) as f:
+        for line in f:
+            if line.strip():
+                records.append(json.loads(line))
+
+    if not records:
+        print("No records to plot.")
+        return
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fields = [
+        ("total_cycles", "Total Cycles", "steelblue"),
+        ("page_count", "Page Count", "purple"),
+        ("number_of_segments", "Number of Segments", "darkgreen"),
+    ]
+
+    # Add user_cycles if no hardware profiles
+    if not hardware_profiles:
+        fields.append(("user_cycles", "User Cycles", "darkorange"))
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    axes = axes.flatten()
+
+    for idx, (field, title, color) in enumerate(fields):
+        ax = axes[idx]
+        values = [r.get(field) for r in records if r.get(field) is not None]
+
+        if not values:
+            ax.text(0.5, 0.5, f"No data for {title}", ha="center", va="center", transform=ax.transAxes)
+            ax.set_title(title)
+            continue
+
+        ax.hist(values, bins=20, color=color, edgecolor="black", alpha=0.7)
+
+        mean_val = np.mean(values)
+        median_val = np.median(values)
+        p10 = np.percentile(values, 10)
+        p90 = np.percentile(values, 90)
+
+        ax.axvline(mean_val, color="red", linestyle="--", linewidth=2, label=f"Mean: {mean_val:.0f}")
+        ax.axvline(median_val, color="green", linestyle="--", linewidth=2, label=f"Median: {median_val:.0f}")
+        ax.axvline(p10, color="purple", linestyle=":", linewidth=1.5, label=f"P10: {p10:.0f}")
+        ax.axvline(p90, color="brown", linestyle=":", linewidth=1.5, label=f"P90: {p90:.0f}")
+
+        ax.set_title(title)
+        ax.set_xlabel(title)
+        ax.set_ylabel("Frequency")
+        ax.legend(loc="upper right", fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+    # 4th subplot: estimated proving times for all hardware profiles
+    if hardware_profiles:
+        ax = axes[3]
+        total_cycles = [r.get("total_cycles") for r in records if r.get("total_cycles")]
+        colors = ["crimson", "dodgerblue", "forestgreen", "darkorange", "purple"]
+
+        for i, profile in enumerate(hardware_profiles):
+            throughput = profile["throughput_khz"]
+            estimated_times = [estimate_proving_time(c, throughput) for c in total_cycles]
+            color = colors[i % len(colors)]
+            ax.hist(estimated_times, bins=20, color=color, edgecolor="black", alpha=0.5, label=profile["name"])
+
+        ax.set_title("Est. Proving Time")
+        ax.set_xlabel("Time (seconds)")
+        ax.set_ylabel("Frequency")
+        ax.legend(loc="upper right", fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+    fig.suptitle(f"{benchmark_name} - Monte Carlo Distribution (window={window_size}, n={len(records)})", fontsize=14)
+    plt.tight_layout()
+
+    plot_path = output_dir / f"{benchmark_name}_{window_size}_histograms.png"
+    plt.savefig(plot_path, dpi=150)
+    plt.close()
+    print(f"Histograms saved to {plot_path}")
+
+
+def run_monte_carlo(
+    config: dict,
+    linux_path: Path,
+    rootfs_path: Path,
+    num_samples: int = 100,
+    window_size: int = 100000,
+    boot_cycles: int = 0,
+    hardware_profiles: list[dict] | None = None,
+) -> list[dict]:
+    name = config["name"]
+    command = config["command"]
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = RESULTS_DIR / f"{name}_monte_carlo_{timestamp}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    log_path = output_dir / "log.bin"
+    data_path = output_dir / f"{name}_{window_size}.jsonl"
+
+    total_cycles = get_total_cycles(
+        command=command,
+        rootfs_path=rootfs_path,
+        linux_path=linux_path,
+    )
+
+    if not total_cycles:
+        print("ERROR: Could not determine total cycles for benchmark.")
+        return []
+
+    payload_cycles = total_cycles - boot_cycles
+    if payload_cycles < window_size:
+        print(f"ERROR: Payload too short for Monte Carlo sampling.")
+        print(f"  Total cycles: {total_cycles}")
+        print(f"  Boot cycles: {boot_cycles}")
+        print(f"  Payload cycles: {payload_cycles}")
+        print(f"  Window size: {window_size}")
+        return []
+
+    print(f"\n{'='*60}")
+    print(f"Monte Carlo Experiment: {name}")
+    print(f"Command: {command}")
+    print(f"Total cycles: {total_cycles}")
+    print(f"Boot cycles: {boot_cycles}")
+    print(f"Payload cycles: {payload_cycles}")
+    print(f"Window size: {window_size}")
+    print(f"Samples: {num_samples}")
+    print(f"{'='*60}\n")
+
+    results = []
+    successful = 0
+
+    for i in tqdm(range(num_samples), desc=f"Sampling {name}"):
+        if log_path.exists():
+            log_path.unlink()
+
+        max_start = max(boot_cycles, total_cycles - window_size - 1)
+        start_cycle = random.randint(boot_cycles, max_start)
+
+        page_count, start_hash, end_hash = run_window_sample(
+            command=command,
+            start_cycle=start_cycle,
+            window_size=window_size,
+            log_path=log_path,
+            rootfs_path=rootfs_path,
+            linux_path=linux_path,
+        )
+
+        if not start_hash or not end_hash:
+            continue
+
+        metrics = run_risc0_prover(
+            start_hash=start_hash,
+            end_hash=end_hash,
+            log_path=log_path,
+            step_size=window_size,
+        )
+
+        if metrics:
+            metrics["benchmark"] = name
+            metrics["page_count"] = page_count
+            metrics["window_size"] = window_size
+            metrics["start_cycle"] = start_cycle
+            results.append(metrics)
+            store_metrics_jsonl(metrics, data_path)
+            successful += 1
+
+    print(f"\nCompleted {successful}/{num_samples} samples successfully.")
+
+    generate_histograms(data_path, name, window_size, output_dir, hardware_profiles)
+
+    return results
+
+
 def run_benchmark(
     config: dict,
     linux_path: Path,
@@ -385,10 +726,12 @@ def run_benchmark(
     min_step: int | None = None,
     max_step: int | None = None,
     increment: int | None = None,
+    boot_cycles: int = 0,
+    hardware_profiles: list[dict] | None = None,
 ) -> list[dict]:
     name = config["name"]
     command = config["command"]
-    max_mcycle = config.get("max_mcycle", 60000000)
+    max_mcycle = boot_cycles
 
     step_config = config.get("step_sizes", {})
     min_step = min_step or step_config.get("min", 50000)
@@ -406,6 +749,7 @@ def run_benchmark(
     print(f"\n{'='*60}")
     print(f"Running benchmark: {name}")
     print(f"Command: {command}")
+    print(f"Boot cycles: {boot_cycles}")
     print(f"Step range: {min_step} to {max_step} (increment: {increment})")
     print(f"{'='*60}\n")
 
@@ -453,7 +797,7 @@ def run_benchmark(
         json.dump(results, f, indent=2)
     print(f"\nResults saved to {results_path}")
 
-    generate_plots(results, name, output_dir)
+    generate_plots(results, name, output_dir, hardware_profiles)
 
     return results
 
@@ -497,6 +841,28 @@ def main():
         action="store_true",
         help="Clean build artifacts",
     )
+    parser.add_argument(
+        "--monte-carlo",
+        action="store_true",
+        help="Run Monte Carlo experiment (random window sampling)",
+    )
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=100,
+        help="Number of Monte Carlo samples (default: 100)",
+    )
+    parser.add_argument(
+        "--window-size",
+        type=int,
+        default=100000,
+        help="Window size in cycles for Monte Carlo sampling (default: 100000)",
+    )
+    parser.add_argument(
+        "--hardware",
+        type=str,
+        help="Hardware profile key from config.yaml for proving time estimation (e.g., risc0_rtx_3090_ti)",
+    )
 
     args = parser.parse_args()
 
@@ -504,7 +870,8 @@ def main():
         print("Available benchmarks:")
         for path in list_benchmarks():
             config = load_benchmark(path)
-            print(f"  - {config['name']}: {config.get('description', 'No description')}")
+            mode = config.get("mode", "sweep")
+            print(f"  - {config['name']} [{mode}]: {config.get('description', 'No description')}")
         return 0
 
     if args.clean:
@@ -530,6 +897,21 @@ def main():
         print("Build complete.")
         return 0
 
+    boot_cycles = measure_boot_cycles(rootfs_path, linux_path)
+    if not boot_cycles:
+        print("ERROR: Failed to measure boot cycles.")
+        return 1
+
+    # Get hardware profile if specified
+    hardware_profile = None
+    if args.hardware:
+        try:
+            hardware_profile = get_hardware_profile(args.hardware)
+            print(f"Using hardware profile: {hardware_profile['name']} ({args.hardware})")
+        except ValueError as e:
+            print(f"ERROR: {e}")
+            return 1
+
     benchmarks_to_run = []
 
     if args.benchmark:
@@ -545,21 +927,58 @@ def main():
             return 1
 
     all_results = {}
+    ran_monte_carlo = False
 
     for yaml_path in benchmarks_to_run:
         config = load_benchmark(yaml_path)
-        results = run_benchmark(
-            config,
-            linux_path=linux_path,
-            rootfs_path=rootfs_path,
-            min_step=args.min_step,
-            max_step=args.max_step,
-            increment=args.increment,
-        )
+        mode = config.get("mode", "sweep")
+
+        # Get hardware profiles: CLI arg overrides benchmark config
+        bench_hardware_profiles = []
+        if hardware_profile:
+            bench_hardware_profiles = [hardware_profile]
+        elif config.get("hardware_profiles"):
+            for hw_key in config["hardware_profiles"]:
+                try:
+                    bench_hardware_profiles.append(get_hardware_profile(hw_key))
+                except ValueError as e:
+                    print(f"WARNING: {e}")
+
+        if args.monte_carlo:
+            mode = "monte-carlo"
+
+        if mode == "monte-carlo":
+            ran_monte_carlo = True
+            mc_config = config.get("monte_carlo", {})
+            num_samples = args.num_samples if args.num_samples != 100 else mc_config.get("num_samples", 100)
+            window_size = args.window_size if args.window_size != 100000 else mc_config.get("window_size", 100000)
+            results = run_monte_carlo(
+                config,
+                linux_path=linux_path,
+                rootfs_path=rootfs_path,
+                num_samples=num_samples,
+                window_size=window_size,
+                boot_cycles=boot_cycles,
+                hardware_profiles=bench_hardware_profiles,
+            )
+        else:
+            results = run_benchmark(
+                config,
+                linux_path=linux_path,
+                rootfs_path=rootfs_path,
+                min_step=args.min_step,
+                max_step=args.max_step,
+                increment=args.increment,
+                boot_cycles=boot_cycles,
+                hardware_profiles=bench_hardware_profiles,
+            )
         all_results[config["name"]] = results
 
     print("\n" + "="*60)
-    print("Benchmark run complete!")
+    if ran_monte_carlo:
+        print("Monte Carlo experiment complete!")
+    else:
+        print("Benchmark run complete!")
     print("="*60)
 
     return 0

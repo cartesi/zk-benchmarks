@@ -1,9 +1,11 @@
 name: stress-int64
 description: "stress-ng int64 benchmark - tests 64-bit integer operations"
 command: "stress-ng --cpu 1 --cpu-method int64 --cpu-ops 400 --metrics"
+mode: sweep
+hardware_profiles:
+  - risc0_rtx_4090
+  - risc0_cpu
 step_sizes:
   min: 50000
-  max: 150000
-  increment: 10000
-max_mcycle: 60000000
-timeout: 600
+  max: 500000
+  increment: 20000
